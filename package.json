@@ -1,0 +1,30 @@
+{
+  "name": "rpagesearch",
+  "version": "2.0.0",
+  "description": "实现自动化静态站全站搜索 - 高性能/实时搜索/正则语法支持/异步/web worker/自动持续构建/可拓展数据格式/自定义前端样式",
+  "main": "search.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RavelloH/RPageSearch.git"
+  },
+  "keywords": [
+    "search",
+    "search-engine",
+    "automation",
+    "regular-expression",
+    "expandable",
+    "webworker"
+  ],
+  "author": "RavelloH",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/RavelloH/RPageSearch/issues"
+  },
+  "homepage": "https://github.com/RavelloH/RPageSearch#readme",
+  "dependencies": {
+    "cheerio": "^1.0.0-rc.12"
+  }
+}

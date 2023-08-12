@@ -1,121 +1,144 @@
-function check() {
-    return false;
+console.log("[RPageSearch] V2");
+console.log("载入模块中...");
+
+const fs = require("fs");
+const cheerio = require("cheerio");
+
+// 配置区
+const articlesFolder = "../articles/"; // 文章根目录
+const articlesFileName = "index.html"; // 文档文件名
+const savePath = "../assets/data/search.json";
+// 选择器
+const articlesName = "#articles-header h2 a"; // 文章标题元素
+const articlesUrl = "#articles-header h2 a"; // 文章链接元素
+const articlesTime = "#articles-header .articles-info time"; // 文章时间元素
+const articlesClass = "#articles-header .articles-info .class a"; // 文章分类元素
+const articlesTag = "#articles-header .articles-tags a"; // 文章标签元素
+const articlesBody = "#articles-body"; // 文章正文元素
+const articlesImages = "#articles-body img"; // 文章图片元素
+const articlesLinks = "#articles-body a"; // 文章外链元素
+const articlesTitle =
+  "#articles-body h2 , #articles-body h3 , articles-body h4 , articles-body h5 , articles-body h6"; // 文章小标题元素
+
+let fileStructure = [];
+let fileList = [];
+let objectStructure = {};
+let objectStructureList = [];
+let json;
+
+console.log("[RPageSearch] LOADED");
+console.log("获取文件树中...");
+
+function fileRead(name) {
+  data = fs.readFileSync(`${articlesFolder}${name}/${articlesFileName}`);
+  fileParse(data);
 }
 
-function maxfor(arr) {
-    var len = arr.length;
-    var max = -Infinity;
-    while (len--) {
-        if (arr[len] > max) {
-            max = arr[len];
-        }
-    }
-    return max;
+function HTMLEncode(str) {
+  var s = "";
+  if (str.length == 0) return "";
+  s = str.replace(/&/g, "&amp;");
+  s = s.replace(/</g, "&lt;");
+  s = s.replace(/>/g, "&gt;");
+  s = s.replace(/ /g, "&nbsp;");
+  s = s.replace(/\'/g, "&#39;");
+  s = s.replace(/\"/g, "&quot;");
+  s = s.replace(/\n/g, "<br/>");
+  return s;
 }
-let input = document.querySelector("input[type='text']");
-let result = document.getElementById('resultlist')
-let infos = document.getElementById('info')
-let button = document.getElementById('searchbutton')
-input.addEventListener("focus", e => {
-    result.id = 'active'
-    result.style.overflow = 'auto'
-    result.style.padding = '3px'
-    infos.id = 'hidden'
-})
-input.addEventListener("blur", e => {
-    result.id = 'resultlist'
-    result.style.overflow = 'hidden'
-    result.style.padding = '0'
-    infos.id = 'info'
-})
 
-obj = JSON.parse(SearchResult);
-function searchtext() {
-    result.innerHTML = input.value;
-    if (input.value == '') {
-        result.innerHTML = '<i>- 搜索 -</i><hr>'+'<p align="center">输入关键词以在文章标题及正文中查询</p><hr>'
+function fileParse(file) {
+  let cla = [];
+  let tag = [];
+  let title = [];
+  let img = [];
+  let links = [];
+  let name, url, time, context;
+
+  const $ = cheerio.load(file, {
+    ignoreWhitespace: true,
+  });
+  name = $(articlesName).text();
+  url = $(articlesUrl).attr("href");
+  time = $(articlesTime).text();
+  $(articlesClass).each(function (i, e) {
+    cla.push($(e).text().toLowerCase());
+  });
+
+  $(articlesTag).each(function (i, e) {
+    tag.push($(e).text().toLowerCase());
+  });
+
+  context = HTMLEncode(
+    $(articlesBody).text().replace(/\s+/g, "&nbsp;").replace(/\n|\r/g, " "),
+  );
+  $(articlesTitle).each(function (i, e) {
+    title.push(
+      $(e).text().toLowerCase().replace(/\s+/g, "").replace(/\n|\r/g, ""),
+    );
+  });
+  $(articlesImages).each(function (i, e) {
+    if (
+      $(e).attr("src").indexOf("http") == -1 &&
+      $(e).attr("src").indexOf("articles") == -1
+    ) {
+      img.push($(articlesUrl).attr("href") + $(e).attr("src"));
+    } else {
+      img.push($(e).attr("src"));
     }
-
-    // 标题搜索
-    resultcount = 0;
-    resultstr = '';
-    var resulttitlecache = new Array()
-    for (i = 0; i < obj.articles.length; i++) {
-        if (obj.articles[i]['title'].includes(input.value) == true) {
-            resulttitlecache.unshift(obj.articles[i]['title'])
-            resultcount++;
-        }
+  });
+  $(articlesLinks).each(function (i, e) {
+    if (
+      typeof $(e).attr("href") !== "undefined" &&
+      $(e).attr("href")[0] !== "#"
+    ) {
+      links.push($(e).attr("href"));
     }
+  });
+  fileStructure.push([name, url, time, cla, tag, title, context, img, links]);
+  packer(name);
+}
 
-    // 标题搜索结果展示
-    if (resultcount !== 0 && resultcount !== obj.articles.length) {
-        for (i = 0; i < resulttitlecache.length; i++) {
-            for (j = 0; j < obj.articles.length; j++) {
-                if (obj.articles[j]['title'] == resulttitlecache[i]) {
-                    titlesearchresult = '<h4><a href="'+obj.articles[j]["path"]+'" class="resulttitle">'+obj.articles[j]['title'].replace(new RegExp(input.value, 'g'), '<mark>'+input.value+'</mark>')+'</a></h4><em>-标题匹配</em><p class="showbox">'+obj.articles[j]['text'].substring(0, 100)+'</p>'
-                    resultstr = titlesearchresult + '<hr>' + resultstr
-                }
-            }
-            result.innerHTML = '<i>"'+input.value+'"</i><hr>'+resultstr;
-        }
-    }
+fs.readdir(articlesFolder, (err, data) => {
+  if (err) {
+    console.log(err);
+  } else {
+    console.log("读取目录成功，共发现" + data.length + "个文件");
+    fileList = [];
+    data.forEach((e) => {
+      if (/^\d+$/.test(e)) {
+        fileList.push(e);
+      }
+    });
+    fileList.sort((a, b) => b - a);
+    fileList.forEach((e) => {
+      fileRead(e);
+    });
+  }
+});
 
-    // 正文搜索
-    var resulttextcache = new Array()
-    for (i = 0; i < obj.articles.length; i++) {
-        if (obj.articles[i]['text'].includes(input.value) == true) {
-            resulttextcache.unshift(obj.articles[i]['text'])
-            resultcount++;
-        }
-    }
+function objectCreater(arr) {
+  this.name = arr[0];
+  this.url = arr[1];
+  this.time = arr[2];
+  this.class = arr[3];
+  this.tag = arr[4];
+  this.title = arr[5];
+  this.context = arr[6];
+  this.img = arr[7];
+  this.links = arr[8];
+}
 
-    // 正文搜索结果计数
-    var targetname = new Array()
-    var targetscore = new Array()
-    if (resulttextcache.length !== 0 && input.value !== '') {
-        for (i = 0; i < resulttextcache.length; i++) {
-            for (j = 0; j < obj.articles.length; j++) {
-                if (obj.articles[j]['text'] == resulttextcache[i]) {
-                    targetname.unshift(obj.articles[j]['title'])
-                    targetscore.unshift(obj.articles[j]['text'].match(RegExp(input.value, 'gim')).length)
-                }
-            }
-        }
-    }
-
-    //排序相关选项
-    var targetscorecache = targetscore.concat([]);
-    var resultfortext = '';
-    var textsearchresult = ''
-    targetscorecache.sort(function(a, b) {
-        return b-a
-    })
-    for (i = 0; i < targetscorecache.length; i++) {
-        for (j = 0; j < targetscore.length; j++) {
-            if (targetscorecache[i] == targetscore[j]) {
-                console.log('文章排序:'+targetname[j])
-                for (k = 0; k < obj.articles.length; k++) {
-                    if (obj.articles[k]['title'] == targetname[j]) {
-                        // 确认选区
-                        textorder = obj.articles[k]['text'].indexOf(input.value) -15;
-                        while (textorder < 0) {
-                            textorder++
-                        }
-
-                        resultfortext = '<h4><a href="'+obj.articles[k]["path"]+'" class="resulttitle">'+obj.articles[k]['title']+'</a></h4><em>-'+targetscorecache[i]+'个结果</em><p class="showbox">...'+obj.articles[k]['text'].substring(textorder, textorder+100).replace(new RegExp(input.value, 'g'), '<mark>'+input.value+'</mark>')+'</p>'
-                        textsearchresult = textsearchresult + '<hr>' + resultfortext;
-                    }
-                }
-            }
-        }
-    }
-
-    // 无效结果安排
-    if (resultcount !== obj.articles.length) {
-        if (resultcount == 0) {
-            result.innerHTML = '<i>"'+input.value+'"</i><hr><p align="center">没有找到结果</p>'
-        }
-    }
-    // 整合
-    result.innerHTML = result.innerHTML.substring(0, result.innerHTML.length-4)+textsearchresult.substring(0, textsearchresult.length-4)+'<hr><a href="https://github.com/ravelloh/RPageSearch" class="tr">Search powered by RavelloH\'s RPageSearch</a>'
+function packer(e) {
+  console.log(`文章'${e}'已完成索引`);
+  if (fileList.length == fileStructure.length) {
+    fileStructure.forEach((e, index) => {
+      objectStructure = new objectCreater(e);
+      objectStructureList.push(objectStructure);
+    });
+    fs.writeFile(savePath, JSON.stringify(objectStructureList), (err) => {
+      if (err) throw err;
+      console.log("生成&写入成功");
+    });
+  }
 }
