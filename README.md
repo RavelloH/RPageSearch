@@ -2,7 +2,11 @@
 实现自动化静态站全站搜索 - 高性能/实时搜索/正则语法支持/异步/web worker/自动持续构建/可拓展数据格式/自定义前端样式
 
 ## 效果
-在我的博客(https://ravelloh.top/articles/) 中可直接试用此搜索功能，感受它的高性能。  
+在我的博客(https://ravelloh.top/articles/) 中可直接试用此搜索功能，感受它的高性能。   
+![标题](https://drive.ravelloh.top/api/raw/?path=/img/rpagesearch-name.png)
+![内容](https://drive.ravelloh.top/api/raw/?path=/img/rpagesearch-link.png)
+![正则](https://drive.ravelloh.top/api/raw/?path=/img/rpagesearch-regular.png)
+![标题](https://drive.ravelloh.top/api/raw/?path=/img/rpagesearch-title.png)
 
 ## 原理
 构建时运行`search.js`，这会对站点所有文章进行索引并生成一个索引文件`search.json`。  
