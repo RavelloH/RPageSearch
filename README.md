@@ -2,7 +2,7 @@
 实现自动化静态站全站搜索 - 高性能/实时搜索/正则语法支持/异步/web worker/自动持续构建/可拓展数据格式/自定义前端样式
 
 ## 效果
-在我的博客(https://ravelloh.top/articles/) 中可直接试用此搜索功能，感受它的高性能。   
+在[我的博客](https://ravelloh.top/articles/)中可直接试用此搜索功能，感受它的高性能。   
 ![标题](https://drive.ravelloh.top/api/raw/?path=/img/rpagesearch-name.png)
 ![内容](https://drive.ravelloh.top/api/raw/?path=/img/rpagesearch-link.png)
 ![正则](https://drive.ravelloh.top/api/raw/?path=/img/rpagesearch-regular.png)
@@ -47,6 +47,7 @@ const articlesFolder = "../articles/"; // 文章根目录
 const articlesFileName = "index.html"; // 文档文件名
 const savePath = "../assets/data/search.json";
 ```
+这将会匹配这样的内容：`../articles/*/index.html`  
 RPageSearch默认会在`articlesFolder`中列出所有目录，并检测其中是否含有`articlesFileName`，如果有则进行解析。  
 其中，`savePath`定义了生成数据的保存路径，后期会用到。
 
@@ -133,7 +134,7 @@ node search.js
 ```
 
 #### 前端接入
-你需要在frontEnd.js中自定义以适应你的样式。详细的例子，可以参照我的博客(https://ravelloh.top/articles/)或RTheme(https://github.com/ravelloh/RTheme)
+你需要在frontEnd.js中自定义以适应你的样式。详细的例子，可以参照[我的博客](https://ravelloh.top/)或[RTheme](https://github.com/RavelloH/RTheme)
 `search.worker.js`一般不需要调整。它会在搜索时返回以下结构的结果：
 ```json
 [
@@ -235,7 +236,155 @@ node search.js
 其中，`context`属性与其他属性稍微不同，它的第二项是匹配个数，第三项是第一次匹配的字符位置。  
 `match`的最后一项是`matchTimes`，表示匹配次数。如果含有标题匹配，这个值会是`999999`以确保其在结果中置顶。
 
-因为是使用worker通讯，你可以参照`frontEnd.js`中的`search`函数配置你的结果展示。
+因为是使用worker通讯，你可以参照`frontEnd.js`中的`search`函数配置你的结果展示。  
+在示例中，搜索的核心实现如下：
+```js
+function getSearchData() {
+  if (typeof searchData == "undefined") {
+    return new Promise((resolve, reject) => {
+      fetch(dataFilePath, {})
+        .then((response) => response.json())
+        .then((data) => {
+          searchData = data;
+          resolve(data);
+        });
+    }).catch((err) => {
+      throw err;
+    });
+  } else {
+    return Promise.resolve(searchData);
+  }
+}
+function search(keyword) {
+  let start = new Date().getTime();
+  if (keyword == "" || keyword == ".") {
+    return false;
+  }
+  searchWord = HTMLDecode(keyword);
+  getSearchData().then((data) => {
+    if (typeof searchWorker == "undefined") {
+      searchWorker = new Worker(workerPath);
+    }
+    searchWorker.onmessage = (result) => {
+      let end = new Date().getTime();
+      let data = result.data;
+      console.log(`查询操作用时${end - start}MS`);
+      if (data.length == 0) {
+        console.log("未找到有关选项");
+        return false;
+      }
+      let resultHTML = "";
+      data.forEach((e, index) => {
+        resultHTML += structureSearchResult(e);
+      });
+      console.log(resultHTML); // 结果输出
+    };
+    searchWorker.postMessage([data, searchWord]);
+  });
+}
+```
+这实际上是[RTheme](https://github.com/RavelloH/RTheme)中相关组件的精简版，它使用`getSearchData()`方式返回一个Promise，并在存在本地缓存是直接返回或在本地无缓存时请求数据并异步返回。  
+最主要的功能实现在函数`search()`的定义内，它会转义搜索词并与Worker通信，将返回结果的每一项传递给新函数`structureSearchResult()`以构建标准HTML输出。示例中的输出格式如下:  
+```js
+function structureSearchResult(result) {
+  let cla = "";
+  let tag = "";
+  let match = "";
+  let matchItem,
+    matchNum,
+    matchContext,
+    matchTag,
+    matchClass,
+    matchTitle,
+    matchLinks;
+  let strLinks = "";
+
+  result.match.forEach((e) => {
+    if (typeof e == "object") {
+      matchItem = e[0];
+    } else {
+      matchItem = e;
+    }
+    switch (matchItem) {
+      case "name":
+        match += "标题 / ";
+        break;
+      case "context":
+        matchNum = e;
+        match += `内容(${e[1]}次) / `;
+        break;
+      case "title":
+        match += "章节 / ";
+        matchTitle = e;
+        break;
+      case "tag":
+        match += "标签 / ";
+        matchTag = e;
+        break;
+      case "class":
+        match += "分类 / ";
+        matchClass = e;
+        break;
+      case "links":
+        match += "外链 / ";
+        matchLinks = e;
+        break;
+    }
+  });
+  result.class.forEach((e, index) => {
+    if (typeof matchClass !== "undefined" && matchClass[1] == index) {
+      cla += `<a href="#/classification/${e}" class='active'>${e}</a>/`;
+    } else {
+      cla += `<a href="#/classification/${e}">${e}</a>/`;
+    }
+  });
+  cla = cla.substring(0, cla.length - 1);
+  result.tag.forEach((e, index) => {
+    if (typeof matchTag !== "undefined" && matchTag[1] == index) {
+      tag += `<a href="#/tag/${e}" class='active'>${e}</a>`;
+    } else {
+      tag += `<a href="#/tag/${e}">${e}</a>`;
+    }
+  });
+  match = match.substring(0, match.length - 3);
+  if (typeof matchNum == "undefined" || matchNum[2] < 10) {
+    matchContext = result.context.substring(0, 150);
+  } else {
+    matchContext = result.context.substring(
+      matchNum[2] - 10,
+      matchNum[2] + 140,
+    );
+  }
+  result.links.forEach((e, index) => {
+    if (typeof matchLinks !== "undefined" && matchLinks[1] == index) {
+      strLinks = `<a class='search-result-links one-line' href='${e}'><span class='i_small ri:link'></span> ${e}</a>`;
+    }
+  });
+  return `
+    <div class="loaded listprogram">
+        <article>
+            <span class="article-name">
+            <h4><a href="${result.url}">${result.name}</a></h4>
+            </span>
+            <p class="articles-info">
+                <span class='search-result-tags'>${match}</span>
+                <time>${result.time}</time> • <span class="i_small ri:archive-line"></span>
+                <span class="class">
+                    ${cla}
+                </span>
+                <div class='search-result-context'><span class='i_small ri:file-list-2-line'></span> ...${matchContext}</div>
+                ${strLinks}
+            </p>
+            <p class="articles-tags">
+                ${tag}
+            </p>
+        </article>
+        <hr>
+    </div>
+    `;
+}
+```
+你可以据此使用`result.url` `result.name` `match` `result.time` `cla` `matchContext` `strLinks` `tag`等结果字符串自定义你的输出模板。其中，`matchContext`会返回结果前后共150字符的内容，你可以通过修改CSS实现其样式的优化，或直接参考[RTheme](https://github.com/RavelloH/RTheme)
 
 ### 持续构建
 在初始化成功后，你可以使用github Workflow在有更改时自动构建。
@@ -287,7 +436,7 @@ jobs:
 
 ## 进阶  
 因为能提供索引文件，你可以据此生成其他文件。参照以下项目：  
-(https://github.com/RavelloH/local-feed-generation)
+[https://github.com/RavelloH/local-feed-generation](https://github.com/RavelloH/local-feed-generation)
 
 ## 依赖  
 https://github.com/cheeriojs/cheerio
